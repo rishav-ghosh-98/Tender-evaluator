@@ -38,3 +38,10 @@ class BidEvaluationReport(BaseModel):
     checks: list[ComplianceCheck]
     overall_compliant: bool
     reasons: list[str]
+
+
+class TenderEvaluation(BaseModel):
+    tender: TenderRequirements
+    bid_evaluations: list[BidEvaluationReport]
+    ranked_bids: list[BidEvaluationReport]
+    recommended_bid: BidEvaluationReport | None = None

@@ -1,7 +1,6 @@
 from bid_processor import load_bids
 from config import BIDS_DIRECTORY, TENDER_PATH, create_llm
-from evaluator import evaluate_bids
-from ranking import rank_bids
+from application import evaluate_tender
 from rag import answer_question
 from tender_processor import load_tender
 
@@ -44,16 +43,15 @@ def display_ranking(ranked_bids):
         )
 
 
-def display_recommendation(ranked_bids):
+def display_recommendation(recommended_bid):
     print("\n--- RECOMMENDATION ---")
 
-    if not ranked_bids:
+    if recommended_bid is None:
         print("No compliant bids were found.")
         return
 
-    l1 = ranked_bids[0]
-    print(f"Recommended L1 bidder: {l1.vendor_name}")
-    print(f"Bid Price: ₹{l1.price:,.2f}")
+    print(f"Recommended L1 bidder: {recommended_bid.vendor_name}")
+    print(f"Bid Price: ₹{recommended_bid.price:,.2f}")
     print("\nThis is a system recommendation only.")
     print(
         "Final tender award must be decided "
@@ -76,12 +74,11 @@ def main():
     )
 
     bids = load_bids(BIDS_DIRECTORY, llm)
-    evaluations = evaluate_bids(tender, bids)
-    display_evaluations(evaluations)
+    result = evaluate_tender(tender, bids)
 
-    ranked_bids = rank_bids(evaluations)
-    display_ranking(ranked_bids)
-    display_recommendation(ranked_bids)
+    display_evaluations(result.bid_evaluations)
+    display_ranking(result.ranked_bids)
+    display_recommendation(result.recommended_bid)
 
 
 if __name__ == "__main__":
