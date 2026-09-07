@@ -10,3 +10,4 @@ pinecone
 sentence-transformers
 pypdf
 langgraph
+pytest
