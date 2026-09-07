@@ -1,3 +1,6 @@
+from functools import lru_cache
+import math
+from numbers import Real
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -12,13 +15,20 @@ from .tender_processor import load_tender
 class GraphState(TypedDict, total=False):
     tender_path: str
     bid_paths: list[str]
-    llm: Any
     tender_requirements: TenderRequirements
     bids: list[Bid]
     bid_evaluations: list[BidEvaluationReport]
     evaluation: TenderEvaluation
     status: str
     error: str
+    review_required: bool
+    review_reason: str
+
+
+@lru_cache(maxsize=1)
+def _get_workflow_llm():
+    """Reuse one LLM instance without putting it in the graph state."""
+    return create_llm()
 
 
 def extract_tender_node(state: GraphState) -> dict[str, Any]:
@@ -27,17 +37,16 @@ def extract_tender_node(state: GraphState) -> dict[str, Any]:
         return {}
 
     tender_path = state.get("tender_path")
-    llm = state.get("llm")
-    if tender_path is None or llm is None:
+    if tender_path is None:
         return {
-            "error": "Tender extraction failed: required input state is missing.",
+            "error": "Tender extraction failed: tender path is missing.",
             "status": "error"
         }
 
     try:
         tender_requirements, _ = load_tender(
             tender_path,
-            llm
+            _get_workflow_llm()
         )
         return {
             "tender_requirements": tender_requirements,
@@ -56,16 +65,15 @@ def process_bids_node(state: GraphState) -> dict[str, Any]:
         return {}
 
     bid_paths = state.get("bid_paths")
-    llm = state.get("llm")
-    if bid_paths is None or llm is None:
+    if bid_paths is None:
         return {
-            "error": "Bid processing failed: required input state is missing.",
+            "error": "Bid processing failed: bid paths are missing.",
             "status": "error"
         }
 
     try:
         bids = [
-            extract_bid_from_pdf(bid_path, llm)
+            extract_bid_from_pdf(bid_path, _get_workflow_llm())
             for bid_path in bid_paths
         ]
         return {
@@ -110,28 +118,82 @@ def evaluate_bids_node(state: GraphState) -> dict[str, Any]:
 
 
 def validate_evaluation_node(state: GraphState) -> dict[str, Any]:
-    """Confirm that the evaluation contains the data needed for ranking."""
+    """Validate evaluation structure and decide whether ranking is safe."""
     if state.get("error"):
         return {}
 
     if not state.get("tender_requirements"):
         return {
-            "error": "Evaluation validation failed: tender requirements are missing.",
-            "status": "error"
+            "review_required": True,
+            "review_reason": "Tender requirements are missing.",
+            "status": "needs_review"
         }
 
-    if state.get("bid_evaluations") is None:
+    bids = state.get("bids")
+    if not bids:
         return {
-            "error": "Evaluation validation failed: bid evaluations are missing.",
-            "status": "error"
+            "review_required": True,
+            "review_reason": "No vendor bids were extracted.",
+            "status": "needs_review"
         }
 
-    return {"status": "evaluation_valid"}
+    bid_evaluations = state.get("bid_evaluations")
+    if not bid_evaluations:
+        return {
+            "review_required": True,
+            "review_reason": "No bid evaluations are available.",
+            "status": "needs_review"
+        }
+
+    for evaluation in bid_evaluations:
+        if not evaluation.checks:
+            return {
+                "review_required": True,
+                "review_reason": (
+                    f"Bid evaluation for {evaluation.vendor_name} "
+                    "contains no compliance checks."
+                ),
+                "status": "needs_review"
+            }
+
+        if (
+            isinstance(evaluation.price, bool)
+            or not isinstance(evaluation.price, Real)
+            or not math.isfinite(float(evaluation.price))
+        ):
+            return {
+                "review_required": True,
+                "review_reason": (
+                    f"Bid evaluation for {evaluation.vendor_name} "
+                    "does not contain a valid numeric price."
+                ),
+                "status": "needs_review"
+            }
+
+    if not any(
+        evaluation.overall_compliant
+        for evaluation in bid_evaluations
+    ):
+        return {
+            "review_required": True,
+            "review_reason": "No compliant bids are available for ranking.",
+            "status": "needs_review"
+        }
+
+    return {
+        "review_required": False,
+        "review_reason": "",
+        "status": "evaluation_valid"
+    }
 
 
 def route_after_validation(state: GraphState) -> str:
-    """Continue to ranking only when validation completed without an error."""
-    return "error" if state.get("error") else "rank_bids"
+    """Route valid evaluations to ranking and unsafe ones to review."""
+    if state.get("error"):
+        return "error"
+    if state.get("review_required"):
+        return "human_review"
+    return "rank_bids"
 
 
 def route_after_tender(state: GraphState) -> str:
@@ -163,6 +225,18 @@ def rank_bids_node(state: GraphState) -> dict[str, Any]:
     return {"status": "completed"}
 
 
+def human_review_node(state: GraphState) -> dict[str, Any]:
+    """End safely with a review message; interactive review comes later."""
+    return {
+        "status": "needs_human_review",
+        "review_required": True,
+        "review_reason": state.get(
+            "review_reason",
+            "The evaluation requires human review."
+        )
+    }
+
+
 def error_node(state: GraphState) -> dict[str, Any]:
     """Terminate the workflow after recording a useful error status."""
     return {
@@ -176,6 +250,7 @@ builder.add_node("process_bids", process_bids_node)
 builder.add_node("evaluate_bids", evaluate_bids_node)
 builder.add_node("validate_evaluation", validate_evaluation_node)
 builder.add_node("rank_bids", rank_bids_node)
+builder.add_node("human_review", human_review_node)
 builder.add_node("error", error_node)
 
 builder.add_edge(START, "extract_tender")
@@ -208,10 +283,12 @@ builder.add_conditional_edges(
     route_after_validation,
     {
         "rank_bids": "rank_bids",
+        "human_review": "human_review",
         "error": "error"
     }
 )
 builder.add_edge("rank_bids", END)
+builder.add_edge("human_review", END)
 builder.add_edge("error", END)
 
 graph = builder.compile()
@@ -225,12 +302,19 @@ def run_tender_evaluation(
     result = graph.invoke({
         "tender_path": tender_path,
         "bid_paths": bid_paths,
-        "llm": create_llm(),
         "status": "started"
     })
 
     if result.get("error"):
         raise RuntimeError(result["error"])
+
+    if result.get("review_required"):
+        raise RuntimeError(
+            result.get(
+                "review_reason",
+                "Tender evaluation requires human review."
+            )
+        )
 
     evaluation = result.get("evaluation")
     if evaluation is None:
