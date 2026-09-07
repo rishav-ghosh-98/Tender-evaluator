@@ -1,4 +1,5 @@
 python-dotenv
+fastapi
 pydantic
 langchain-community
 langchain-core
