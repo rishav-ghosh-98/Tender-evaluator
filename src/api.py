@@ -4,11 +4,8 @@ import tempfile
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from .application import evaluate_tender
-from .bid_processor import extract_bid_from_pdf
-from .config import create_llm
+from .graph import run_tender_evaluation
 from .models import TenderEvaluation
-from .tender_processor import load_tender
 
 
 app = FastAPI(
@@ -65,6 +62,12 @@ async def evaluate(
         if bid is not None
     ]
 
+    if not bids:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one bid PDF is required."
+        )
+
     # -------------------------
     # Validate bids
     # -------------------------
@@ -102,19 +105,9 @@ async def evaluate(
             bid_paths.append(bid_file.name)
             temporary_paths.append(bid_file.name)
 
-        llm = create_llm()
-        tender_requirements, _ = load_tender(
+        return run_tender_evaluation(
             tender_file.name,
-            llm
-        )
-        extracted_bids = [
-            extract_bid_from_pdf(bid_path, llm)
-            for bid_path in bid_paths
-        ]
-
-        return evaluate_tender(
-            tender_requirements,
-            extracted_bids
+            bid_paths
         )
     finally:
         for temporary_path in temporary_paths:
