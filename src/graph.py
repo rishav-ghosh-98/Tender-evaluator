@@ -3,13 +3,29 @@ import math
 from numbers import Real
 from typing import Any, TypedDict
 
+print("[startup] before importing langgraph", flush=True)
 from langgraph.graph import END, START, StateGraph
+print("[startup] after importing langgraph", flush=True)
 
+print("[startup] before importing bid_processor", flush=True)
 from .bid_processor import extract_bid_from_pdf
+print("[startup] after importing bid_processor", flush=True)
+
+print("[startup] before importing config", flush=True)
 from .config import create_llm
+print("[startup] after importing config", flush=True)
+
+print("[startup] before importing application", flush=True)
 from .application import evaluate_tender
+print("[startup] after importing application", flush=True)
+
+print("[startup] before importing models", flush=True)
 from .models import Bid, BidEvaluationReport, TenderEvaluation, TenderRequirements
+print("[startup] after importing models", flush=True)
+
+print("[startup] before importing tender_processor", flush=True)
 from .tender_processor import load_tender
+print("[startup] after importing tender_processor", flush=True)
 
 
 class GraphState(TypedDict, total=False):

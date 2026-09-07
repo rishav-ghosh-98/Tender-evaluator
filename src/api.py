@@ -1,10 +1,14 @@
 import os
 import tempfile
 
+print("[startup] before importing fastapi", flush=True)
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+print("[startup] after importing fastapi", flush=True)
 
+print("[startup] before importing graph", flush=True)
 from .graph import run_tender_evaluation
+print("[startup] after importing graph", flush=True)
 from .models import TenderEvaluation
 
 
