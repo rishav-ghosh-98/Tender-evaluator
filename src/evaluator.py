@@ -1,7 +1,7 @@
 from datetime import datetime
 import re
 
-from models import Bid, BidEvaluationReport, ComplianceCheck, TenderRequirements
+from .models import Bid, BidEvaluationReport, ComplianceCheck, TenderRequirements
 
 
 def evaluate_bid(

@@ -1,4 +1,4 @@
-from models import BidEvaluationReport
+from .models import BidEvaluationReport
 
 
 def rank_bids(

@@ -5,12 +5,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from pinecone import Pinecone
 
-from config import (
+from .config import (
     EMBEDDING_MODEL_NAME,
     PINECONE_INDEX_NAME,
     get_pinecone_api_key,
 )
-from models import TenderRequirements
+from .models import TenderRequirements
 
 
 REQUIREMENTS_PROMPT = ChatPromptTemplate.from_template("""

@@ -1,6 +1,6 @@
-from evaluator import evaluate_bids
-from models import Bid, TenderEvaluation, TenderRequirements
-from ranking import rank_bids
+from .evaluator import evaluate_bids
+from .models import Bid, TenderEvaluation, TenderRequirements
+from .ranking import rank_bids
 
 
 def evaluate_tender(

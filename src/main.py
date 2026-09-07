@@ -1,8 +1,8 @@
-from bid_processor import load_bids
-from config import BIDS_DIRECTORY, TENDER_PATH, create_llm
-from application import evaluate_tender
-from rag import answer_question
-from tender_processor import load_tender
+from src.bid_processor import load_bids
+from src.config import BIDS_DIRECTORY, TENDER_PATH, create_llm
+from src.application import evaluate_tender
+from src.rag import answer_question
+from src.tender_processor import load_tender
 
 
 def display_evaluations(evaluations):

@@ -3,7 +3,7 @@ from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.prompts import ChatPromptTemplate
 
-from models import Bid
+from .models import Bid
 
 
 BID_PROMPT = ChatPromptTemplate.from_template("""
